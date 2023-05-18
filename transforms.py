@@ -1,3 +1,4 @@
+import torch
 import functools
 import re
 from time import perf_counter_ns
@@ -43,8 +44,22 @@ class Pipeline:
             for transform in self.transforms
         }
 
+class ToCL(torch.nn.Module):
+    def forward(self, x):
+        return x[None].contiguous(memory_format=torch.channels_last)[0]
 
-def classification_simple_pipeline_builder(*, input_type, api_version):
+class ToCF(torch.nn.Module):
+    def forward(self, x):
+        return x[None].contiguous(memory_format=torch.contiguous_format)[0]
+
+class CompiledNormalize(torch.nn.Module):
+    def __init__(self, module):
+        super().__init__()
+        self.fn = torch.compile(module.functional.normalize)
+    def forward(self, x):
+        return self.fn(x, mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225))
+
+def classification_simple_pipeline_builder(*, input_type, api_version, normalize_input=None, **kwargs):
     if input_type == "Datapoint" and api_version == "v1":
         return None
 
@@ -67,7 +82,7 @@ def classification_simple_pipeline_builder(*, input_type, api_version):
     pipeline.extend(
         [
             RandomResizedCropWithoutResize(224),
-            transforms.Resize(224, antialias=True),
+            transforms.Resize((224, 224), antialias=True),
             transforms.RandomHorizontalFlip(p=0.5),
         ]
     )
@@ -75,20 +90,24 @@ def classification_simple_pipeline_builder(*, input_type, api_version):
     if input_type == "PIL":
         pipeline.append(transforms.PILToTensor())
 
-    pipeline.extend(
-        [
-            transforms.ConvertImageDtype(torch.float32),
-            transforms.Normalize(
-                mean=(0.485, 0.456, 0.406),
-                std=(0.229, 0.224, 0.225),
-            ),
-        ]
-    )
+    pipeline.extend([transforms.ConvertImageDtype(torch.float32)])
+
+    if input_type != "PIL" and api_version == "v2":
+        if normalize_input == "CL":
+            pipeline.extend([ToCL()])
+        elif normalize_input == "CF":
+            pipeline.extend([ToCF()])
+
+    if normalize_input == "compile" and input_type != "PIL" and api_version == "v2":
+        normalize = CompiledNormalize(transforms)
+    else:
+        normalize = transforms.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225))
+    pipeline.extend([normalize])
 
     return Pipeline(pipeline)
 
 
-def classification_complex_pipeline_builder(*, input_type, api_version):
+def classification_complex_pipeline_builder(*, input_type, api_version, normalize_input=None, **kwargs):
     if input_type == "Datapoint" and api_version == "v1":
         return None
 
@@ -111,7 +130,7 @@ def classification_complex_pipeline_builder(*, input_type, api_version):
     pipeline.extend(
         [
             RandomResizedCropWithoutResize(224),
-            transforms.Resize(224, antialias=True),
+            transforms.Resize((224, 224), antialias=True),
             transforms.RandomHorizontalFlip(p=0.5),
             transforms.AutoAugment(transforms.AutoAugmentPolicy.IMAGENET),
         ]
@@ -124,17 +143,25 @@ def classification_complex_pipeline_builder(*, input_type, api_version):
         [
             transforms.RandomErasing(p=0.2),
             transforms.ConvertImageDtype(torch.float32),
-            transforms.Normalize(
-                mean=(0.485, 0.456, 0.406),
-                std=(0.229, 0.224, 0.225),
-            ),
         ]
     )
+
+    if input_type != "PIL" and api_version == "v2":
+        if normalize_input == "CL":
+            pipeline.extend([ToCL()])
+        elif normalize_input == "CF":
+            pipeline.extend([ToCF()])
+
+    if normalize_input == "compile" and input_type != "PIL" and api_version == "v2":
+        normalize = CompiledNormalize(transforms)
+    else:
+        normalize = transforms.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225))
+    pipeline.extend([normalize])
 
     return Pipeline(pipeline)
 
 
-def detection_ssdlite_pipeline_builder(*, input_type, api_version):
+def detection_ssdlite_pipeline_builder(*, input_type, api_version, **kwargs):
     if input_type == "Datapoint" and api_version == "v1":
         return None
 
