@@ -150,11 +150,11 @@ if __name__ == "__main__":
     with contextlib.redirect_stdout(tee):
         main(
             tasks=[
-                ("Classif simple", classification_simple_pipeline_builder, classification_dataset_builder, {}),
+                ("Classif simple, Vanilla", classification_simple_pipeline_builder, classification_dataset_builder, {}),
                 ("Classif simple, CL-Normalize", classification_simple_pipeline_builder, classification_dataset_builder, {"normalize_input": "CL"}),
                 ("Classif simple, CF-Normalize", classification_simple_pipeline_builder, classification_dataset_builder, {"normalize_input": "CF"}),
                 ("Classif simple, compiled-Normalize", classification_simple_pipeline_builder, classification_dataset_builder, {"normalize_input": "compile"}),
-                ("Classif complex", classification_complex_pipeline_builder, classification_dataset_builder, {}),
+                ("Classif complex, Vanilla", classification_complex_pipeline_builder, classification_dataset_builder, {}),
                 ("Classif complex, CL-Normalize", classification_complex_pipeline_builder, classification_dataset_builder, {"normalize_input": "CL"}),
                 ("Classif complex, CF-Normalize", classification_complex_pipeline_builder, classification_dataset_builder, {"normalize_input": "CF"}),
                 ("Classif complex, compiled-Normalize", classification_complex_pipeline_builder, classification_dataset_builder, {"normalize_input": "compile"}),
@@ -168,4 +168,4 @@ if __name__ == "__main__":
         )
 
         print("#" * 60)
-        # collect_env()
+        collect_env()
